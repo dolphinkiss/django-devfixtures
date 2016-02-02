@@ -1,5 +1,6 @@
 
 import devfixtures
+import devfixtures.management.commands.devfixture
 
 
 def test_main():

@@ -19,13 +19,13 @@ Overview
     :target: https://readthedocs.org/projects/django-devfixtures
     :alt: Documentation Status
 
-.. |travis| image:: https://travis-ci.org/peterlauri/django-devfixtures.svg?branch=master
+.. |travis| image:: https://travis-ci.org/dolphinkiss/django-devfixtures.svg?branch=master
     :alt: Travis-CI Build Status
-    :target: https://travis-ci.org/peterlauri/django-devfixtures
+    :target: https://travis-ci.org/dolphinkiss/django-devfixtures
 
-.. |codecov| image:: https://codecov.io/github/peterlauri/django-devfixtures/coverage.svg?branch=master
+.. |codecov| image:: https://codecov.io/github/dolphinkiss/django-devfixtures/coverage.svg?branch=master
     :alt: Coverage Status
-    :target: https://codecov.io/github/peterlauri/django-devfixtures
+    :target: https://codecov.io/github/dolphinkiss/django-devfixtures
 
 .. |version| image:: https://img.shields.io/pypi/v/django-devfixtures.svg?style=flat
     :alt: PyPI Package latest release

@@ -3,12 +3,16 @@ import re
 import shutil
 import subprocess
 import tempfile
+import traceback
 from datetime import datetime
+from distutils.spawn import find_executable
 from os import listdir
 from os.path import isfile, join, basename, realpath, relpath, isdir
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+
+REQUIRED_EXEC = ['psql', 'dropdb', 'createdb', 'unzip']
 
 
 class Command(BaseCommand):
@@ -38,6 +42,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+
+        self._check_dependencies()
+
         # TODO: if MEDIA_ROOT is not set, maybe we should allow it anyways, and just do the db dump
         if not hasattr(settings, 'MEDIA_ROOT'):
             raise CommandError('MEDIA_ROOT needs to be set to use devfixtures')
@@ -58,8 +65,23 @@ class Command(BaseCommand):
             if not options['fixture_file'] and not isdir(self._fixture_dir):
                 raise CommandError('Fixture dir %s does not exist, did you generate any fixtures before?')
             fixture_file = options['fixture_file'] or self._find_best_match()
-            self._backup()
-            self._restore(fixture_file)
+            backup_fixture_file = self._backup()
+            try:
+                self._restore(fixture_file)
+            except Exception:
+                self.write_info('Restore failed, trying to restore backup.', 0)
+                self.stderr.write('----- EXCEPTION -----')
+                self.stderr.write(traceback.format_exc())
+                self.stderr.write('----- EXCEPTION END -----')
+                try:
+                    self._restore(backup_fixture_file)
+                except Exception:
+                    self.stderr.write('----- EXCEPTION -----')
+                    self.stderr.write(traceback.format_exc())
+                    self.stderr.write('----- EXCEPTION END -----')
+                    raise CommandError('Failed to restore backup fixture %s' % backup_fixture_file)
+                else:
+                    self.write_info('... restore completed', 0)
         else:
             raise CommandError('action can only be create or restore')
 
@@ -95,9 +117,11 @@ class Command(BaseCommand):
             self.write_debug('Create new media root')
             shutil.copytree(join(tmp_dir, 'MEDIA_ROOT'), self._media_root)
             self.write_debug('... done creating new media root')
-            self.write_debug('Restoring database')
+            self.write_debug('Drop and create database')
             subprocess.check_output(['dropdb', self._database_name])
             subprocess.check_output(['createdb', self._database_name])
+            self.write_debug('... drop/create done')
+            self.write_debug('Restoring database')
             with open(join(tmp_dir, 'db.sql')) as fp:
                 subprocess.check_output(['psql', self._database_name], stdin=fp)
             self.write_debug('... database restored')
@@ -113,6 +137,15 @@ class Command(BaseCommand):
         self.write_info('Backing up to %s' % backup_fixture_file, 1)
         self._create(backup_fixture_file, less_verbose=1)
         self.write_info('... backup complete', 1)
+        return backup_fixture_file
+
+    def _check_dependencies(self):
+        not_found = []
+        for executable in REQUIRED_EXEC:
+            if not find_executable(executable):
+                not_found.append(executable)
+        if not_found:
+            raise CommandError('The following executables are required: %s, missing: %s' % (REQUIRED_EXEC, not_found))
 
     def _fixture_files_per_commit(self):
         files_per_commit = {}

@@ -1,14 +1,14 @@
-import subprocess
-from django.core.management.base import BaseCommand, CommandError
-from django.conf import settings
-from os.path import join, realpath, relpath, split
 import getpass
 import re
-from datetime import datetime
 import shutil
+import subprocess
 import tempfile
+from datetime import datetime
 from os import listdir
-from os.path import isfile, join, basename
+from os.path import isfile, join, basename, realpath, relpath, isdir
+
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
@@ -16,14 +16,8 @@ class Command(BaseCommand):
     help = 'Development fixture manager'
 
     def add_arguments(self, parser):
-        default_fixtures_dir = relpath(getattr(
-            settings, 'DKISS_EXT_DEVFIXTURE_DIR',
-            join(settings.BASE_DIR, '..', 'dev_fixtures')
-        ))
-        default_backup_dir = relpath(getattr(
-            settings, 'DKISS_EXT_DEVFIXTURE_BACKUP_DIR',
-            join(settings.BASE_DIR, '..', '.dev_fixtues_backup')
-        ))
+        default_fixtures_dir = relpath(settings.DEVFIXTURE_DIR)
+        default_backup_dir = relpath(settings.DEVFIXTURE_BACKUP_DIR)
 
         parser.add_argument('action', choices=['create', 'restore'])
         parser.add_argument(
@@ -44,25 +38,81 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        # TODO: check that we have MEDIA_ROOT defined
+        # TODO: if MEDIA_ROOT is not set, maybe we should allow it anyways, and just do the db dump
+        if not hasattr(settings, 'MEDIA_ROOT'):
+            raise CommandError('MEDIA_ROOT needs to be set to use devfixtures')
+
+        self._media_root = realpath(settings.MEDIA_ROOT)
+        self._media_root_basename = basename(self._media_root)
         self._fixture_dir = realpath(options['fixtures_dir'])
         self._backup_dir = realpath(options['backup_dir'])
         self._database_name = settings.DATABASES['default']['NAME']
-        self._media_root = settings.MEDIA_ROOT
-        self._media_file_basename = basename(self._media_root)
+        self._verbosity = options['verbosity']
+
+        if not isdir(self._media_root):
+            raise CommandError('MEDIA_ROOT %s does not exist' % self._media_root)
 
         if options['action'] == 'create':
-            fixture_file = options['fixture_file'] or join(self._fixture_dir, self._build_fixture_file_name())
-            self._create_fixture(fixture_file)
+            self._create(options['fixture_file'] or join(self._fixture_dir, self._build_fixture_file_name()))
         elif options['action'] == 'restore':
-            backup_fixture_file = join(self._backup_dir, self._build_fixture_file_name())
-            self.write_info('Backing up to %s' % backup_fixture_file)
-            self._create_fixture(backup_fixture_file)
-            self.write_info('... backup complete')
+            if not options['fixture_file'] and not isdir(self._fixture_dir):
+                raise CommandError('Fixture dir %s does not exist, did you generate any fixtures before?')
             fixture_file = options['fixture_file'] or self._find_best_match()
-            self._restore_fixture(fixture_file)
+            self._backup()
+            self._restore(fixture_file)
         else:
             raise CommandError('action can only be create or restore')
+
+    def _create(self, fixture_file_path, less_verbose=0):
+        try:
+            self.write_info('Creating fixture %s' % fixture_file_path, 1+less_verbose)
+            fixture_file_path = re.sub(r'\.zip$', '', fixture_file_path)  # we strip away .zip if given
+            tmp_dir = tempfile.mkdtemp()
+            # copy media root
+            shutil.copytree(self._media_root, join(tmp_dir, 'MEDIA_ROOT'))
+            # database dump
+            with open(join(tmp_dir, 'db.sql'), 'w') as fp:
+                subprocess.call(['pg_dump', '--clean', '--no-owner', self._database_name], stdout=fp)
+            # creating the fixture archive
+            archive_name = shutil.make_archive(fixture_file_path, 'zip', root_dir=tmp_dir)
+            self.write_debug(subprocess.check_output(['unzip', '-l', archive_name]))
+        except:
+            self.write_debug('Temporary directory %s kept due to exception.' % tmp_dir)
+            raise
+        else:
+            self.write_info('... fixture created', 1+less_verbose)
+            shutil.rmtree(tmp_dir)
+
+    def _restore(self, fixture_file):
+        try:
+            tmp_dir = tempfile.mkdtemp()
+            self.write_debug('Restore tmp dir: %s' % tmp_dir)
+            self.write_debug(subprocess.check_output(['unzip', fixture_file, '-d', tmp_dir]))
+            self.write_info('Restoring fixture %s' % fixture_file, 1)
+            self.write_debug('Deleting %s' % self._media_root)
+            shutil.rmtree(self._media_root)
+            self.write_debug('... done deleting')
+            self.write_debug('Create new media root')
+            shutil.copytree(join(tmp_dir, 'MEDIA_ROOT'), self._media_root)
+            self.write_debug('... done creating new media root')
+            self.write_debug('Restoring database')
+            subprocess.check_output(['dropdb', self._database_name])
+            subprocess.check_output(['createdb', self._database_name])
+            with open(join(tmp_dir, 'db.sql')) as fp:
+                subprocess.check_output(['psql', self._database_name], stdin=fp)
+            self.write_debug('... database restored')
+        except:
+            self.write_debug('Temporary directory %s kept due to exception.' % tmp_dir)
+            raise
+        else:
+            self.write_info('... fixture restored', 1)
+            shutil.rmtree(tmp_dir)
+
+    def _backup(self):
+        backup_fixture_file = join(self._backup_dir, self._build_fixture_file_name())
+        self.write_info('Backing up to %s' % backup_fixture_file, 1)
+        self._create(backup_fixture_file, less_verbose=1)
+        self.write_info('... backup complete', 1)
 
     def _fixture_files_per_commit(self):
         files_per_commit = {}
@@ -79,60 +129,15 @@ class Command(BaseCommand):
         This function checks the fixture_dir for the latest fixture using commits backwards starting from
         HEAD and back.
         """
-        commit_list = subprocess.check_output(['git', 'log', '--pretty=format:%h']).splitlines(False)
         fixture_files_per_commit = self._fixture_files_per_commit()
+        if not fixture_files_per_commit:
+            raise CommandError('There are no autogenerated fixtures in %s' % self._fixture_dir)
+        commit_list = subprocess.check_output(['git', 'log', '--pretty=format:%h']).splitlines(False)
         for commit in commit_list:
             if commit in fixture_files_per_commit:
                 # returing the latests file
                 return sorted([realpath(f) for f in fixture_files_per_commit[commit]], reverse=True)[0]
         raise CommandError('Could not find a best match fixture')
-
-    def _restore_fixture(self, fixture_file):
-        try:
-            tmp_dir = tempfile.mkdtemp()
-            self.write_debug('Restore tmp dir %s' % tmp_dir)
-            self.write_debug(subprocess.check_output(['unzip', fixture_file, '-d', tmp_dir]))
-            self.write_info('Restoring fixture %s' % fixture_file)
-            self.write_debug('Deleting %s' % self._media_root)
-            shutil.rmtree(self._media_root)
-            self.write_debug('... done deleting')
-            self.write_debug('Create new media root')
-            shutil.copytree(join(tmp_dir, self._media_file_basename), self._media_root)
-            self.write_debug('... done creating new media root')
-            self.write_debug('Restoring database')
-            subprocess.check_output(['dropdb', self._database_name])
-            subprocess.check_output(['createdb', self._database_name])
-            with open(join(tmp_dir, 'db.sql')) as fp:
-                subprocess.check_output(['psql', self._database_name], stdin=fp)
-            self.write_debug('... database restored')
-        except:
-            raise
-        else:
-            self.write_info('... fixture restored')
-        finally:
-            pass
-
-    def _create_fixture(self, fixture_file_path):
-        try:
-            self.write_info('Creating fixture %s' % fixture_file_path)
-            fixture_file_path = re.sub(r'\.zip$', '', fixture_file_path)  # we strip away .zip if given
-            tmp_dir = tempfile.mkdtemp()
-            # copy media root
-            shutil.copytree(self._media_root, join(tmp_dir, split(self._media_root)[1]))
-            # database dump
-            with open(join(tmp_dir, 'db.sql'), 'w') as fp:
-                subprocess.call(['pg_dump', '--clean', '--no-owner', self._database_name], stdout=fp)
-            # creating the fixture archive
-            archive_name = shutil.make_archive(fixture_file_path, 'zip', root_dir=tmp_dir)
-            self.write_debug(subprocess.check_output(['unzip', '-l', archive_name]))
-        except:
-            # shutil.rmtree(tmp_dir)
-            raise
-        else:
-            self.write_info('... fixture created')
-        finally:
-            pass
-            # shutil.rmtree(tmp_dir)
 
     def _build_fixture_file_name(self):
 
@@ -151,8 +156,10 @@ class Command(BaseCommand):
         }
         return '%(commit_date)s+%(commit)s+%(run_date)s+%(user)s.zip' % format_args
 
-    def write_info(self, msg):
-        self.stdout.write(msg)
+    def write_info(self, msg, verbose_level):
+        if self._verbosity >= verbose_level:
+            self.stdout.write(msg)
 
     def write_debug(self, msg):
-        self.stderr.write(msg)
+        if self._verbosity == 3:
+            self.stderr.write(msg)

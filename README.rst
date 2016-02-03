@@ -61,6 +61,50 @@ Installation
 
     pip install django-devfixtures
 
+Configuration
+=============
+
+::
+
+    settings.DEVFIXTURE_DIR         # path to directory where auto generated fixtures should be stored
+    settings.DEVFIXTURE_BACKUP_DIR  # path to where backups are stored when running restore
+
+
+Usage
+=====
+
+Create fixture:
+
+::
+
+    # ./manage.py devfixture create
+
+Restore fixture:
+
+::
+
+    # ./manage.py devfixture restore
+
+Create manual fixture sharing, for example if you have a branch and you want some other developer to take a look
+at a bug. Run this and send the zip file to the other developer:
+
+::
+
+    # ./manage.py devfixture create -f ~/Desktop/devfixture-for-peter-debugging.zip
+
+To load a shared fixture:
+
+::
+
+    # ./manage.py devfixture restore -f ~/Desktop/devfixture-for-peter-debugging.zip
+
+When running restore, a backup is always created. You can restore it the same way as above.
+
+::
+
+    # ./manage.py devfixture -h
+
+
 Documentation
 =============
 

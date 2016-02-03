@@ -64,6 +64,8 @@ Installation
 Configuration
 =============
 
+Add **devfixtures** to **INSTALLED_APPS**.
+
 ::
 
     settings.DEVFIXTURE_DIR         # path to directory where auto generated fixtures should be stored

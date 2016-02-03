@@ -57,6 +57,8 @@ Share development fixtures across your team, with git commit id tracing and auto
 Installation
 ============
 
+Currently this package requires git, psql, pg_dump createdb, dropdb and unzip to function.
+
 ::
 
     pip install django-devfixtures
@@ -71,6 +73,27 @@ Add **devfixtures** to **INSTALLED_APPS**.
     settings.DEVFIXTURE_DIR         # path to directory where auto generated fixtures should be stored
     settings.DEVFIXTURE_BACKUP_DIR  # path to where backups are stored when running restore
 
+
+How it works
+============
+
+When you **create** a fixture (without any arguments) the management command will zip MEDIA_FILES and database dump to
+a file with naming <AUTHOR_DATE>+<COMMITID>+<CREATED_DATE>+<CREATOR>.zip.
+
+The auto restore function will check from HEAD and backards in the commit tree, and when it finds a fixture file with
+that commit id, it will restore that version after a backup of the current state has been created. If the restore for
+some reason fails, it will attempt to restore the backuped fixture.
+
+This works with the following criterias:
+
+* You will not rebase/rewrite history, as commit ids might no longer match
+* You will not delete migrations manually
+
+It also have the limitations to unly work with PostgreSQL. And there are some current limitations, due to the fact
+that the implementation uses pg_dump etc for creating dumps. Requirements:
+
+* The database name is defined in **settings.DATABASES['default']['NAME']**
+* The running user have permissions to dropdb/createdb
 
 Usage
 =====

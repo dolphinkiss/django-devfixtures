@@ -12,7 +12,7 @@ from os.path import isfile, join, basename, realpath, relpath, isdir
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-REQUIRED_EXEC = ['psql', 'dropdb', 'createdb', 'unzip']
+REQUIRED_EXEC = ['psql', 'dropdb', 'createdb', 'unzip', 'pg_dump', 'git']
 
 
 class Command(BaseCommand):

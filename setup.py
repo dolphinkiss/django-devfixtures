@@ -23,7 +23,7 @@ def read(*names, **kwargs):
 
 setup(
     name='django-devfixtures',
-    version='0.1.2',
+    version='0.1.3',
     license='BSD',
     description='Share development fixtures across your team, with git commit id tracing and autodetect.',
     long_description='%s\n%s' % (

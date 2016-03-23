@@ -26,7 +26,7 @@ project = u'Django DevFixtures'
 year = u'2016'
 author = u'Peter Lauri'
 copyright = '{0}, {1}'.format(year, author)
-version = release = u'0.1.2'
+version = release = u'0.1.3'
 
 pygments_style = 'trac'
 templates_path = ['.']

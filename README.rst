@@ -16,7 +16,7 @@ Overview
       - |version| |downloads| |wheel| |supported-versions| |supported-implementations|
 
 .. |docs| image:: https://readthedocs.org/projects/django-devfixtures/badge/?style=flat
-    :target: https://readthedocs.org/projects/django-devfixtures
+    :target: http://django-devfixtures.readthedocs.org/en/latest/
     :alt: Documentation Status
 
 .. |travis| image:: https://travis-ci.org/dolphinkiss/django-devfixtures.svg?branch=master

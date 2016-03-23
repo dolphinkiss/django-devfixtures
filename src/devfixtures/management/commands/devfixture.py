@@ -94,7 +94,9 @@ class Command(BaseCommand):
             shutil.copytree(self._media_root, join(tmp_dir, 'MEDIA_ROOT'))
             # database dump
             with open(join(tmp_dir, 'db.sql'), 'w') as fp:
-                subprocess.call(['pg_dump', '--clean', '--no-owner', self._database_name], stdout=fp)
+                return_code = subprocess.call(['pg_dump', '--clean', '--no-owner', self._database_name], stdout=fp)
+                if return_code != 0:
+                    raise CommandError('pg_dump failed with exit code {}'.format(return_code))
             # creating the fixture archive
             archive_name = shutil.make_archive(fixture_file_path, 'zip', root_dir=tmp_dir)
             self.write_debug(subprocess.check_output(['unzip', '-l', archive_name]))

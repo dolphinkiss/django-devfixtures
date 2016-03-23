@@ -95,6 +95,20 @@ that the implementation uses pg_dump etc for creating dumps. Requirements:
 * The database name is defined in **settings.DATABASES['default']['NAME']**
 * The running user have permissions to dropdb/createdb
 
+
+Storing the dev_fixtures in git
+===============================
+
+Devfixtures can become large, if you have big set of media files. If you use github, you are encouraged to use git-lfs
+to store the files. Read about git lfs here: https://git-lfs.github.com/
+
+Add devfixtures/* to your tracked git lfs files before you add your first fixture to git.
+
+::
+
+    # git lfs track 'dev_fixtures/*'
+
+
 Usage
 =====
 

@@ -80,7 +80,7 @@ How it works
 When you **create** a fixture (without any arguments) the management command will zip MEDIA_FILES and database dump to
 a file with naming <AUTHOR_DATE>+<COMMITID>+<CREATED_DATE>+<CREATOR>.zip.
 
-The auto restore function will check from HEAD and backards in the commit tree, and when it finds a fixture file with
+The auto restore function will check from HEAD and backwards in the commit tree, and when it finds a fixture file with
 that commit id, it will restore that version after a backup of the current state has been created. If the restore for
 some reason fails, it will attempt to restore the backuped fixture.
 
